@@ -31,8 +31,8 @@ document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
         const dropdown = document.getElementById('moreWorksDropdown');
         const button = document.querySelector('.more-works-btn');
-        dropdown.classList.remove('show');
-        button.classList.remove('active');
+        if (dropdown) dropdown.classList.remove('show');
+        if (button) button.classList.remove('active');
     }
 });
 
@@ -119,6 +119,49 @@ function setupVideoCarouselAutoplay() {
     });
 }
 
+// Synchronized multi-view video grids (angel / bell / teapot), stacked vertically.
+// Each grid's clips share identical length/fps, so we lock them to a master clock.
+// A grid auto-plays in sync when it scrolls into view, and pauses when it leaves.
+const MVIEW_SYNC_THRESHOLD = 0.18; // seconds of drift tolerated before correcting
+
+function setupSyncedVideoGrid() {
+    document.querySelectorAll('.mview-grid').forEach(function(grid) {
+        const videos = Array.from(grid.querySelectorAll('video'));
+        if (videos.length === 0) return;
+        const master = videos[0];
+
+        function playAll() {
+            videos.forEach(v => { v.currentTime = 0; });
+            videos.forEach(v => { v.play().catch(() => {}); });
+        }
+        function pauseAll() {
+            videos.forEach(v => v.pause());
+        }
+
+        // Keep every other video pinned to the master's clock (re-aligns on loop too).
+        master.addEventListener('timeupdate', function() {
+            videos.forEach(function(v) {
+                if (v === master) return;
+                if (Math.abs(v.currentTime - master.currentTime) > MVIEW_SYNC_THRESHOLD) {
+                    v.currentTime = master.currentTime;
+                }
+            });
+        });
+
+        // Auto-play this grid in sync while it is on screen; pause when scrolled away.
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    playAll();
+                } else {
+                    pauseAll();
+                }
+            });
+        }, { threshold: 0.2 });
+        observer.observe(grid);
+    });
+}
+
 $(document).ready(function() {
     // Check for click events on the navbar burger icon
 
@@ -133,10 +176,13 @@ $(document).ready(function() {
 
 	// Initialize all div with carousel class
     var carousels = bulmaCarousel.attach('.carousel', options);
-	
+
     bulmaSlider.attach();
     
     // Setup video autoplay for carousel
     setupVideoCarouselAutoplay();
+
+    // Setup synchronized multi-view video grid
+    setupSyncedVideoGrid();
 
 })
